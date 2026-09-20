@@ -198,11 +198,24 @@ que a tool traduz para uma resposta normal ao agente, que responde ao morador se
 
 ## Passo 15 — Fechamento: validação cruzada, README e revisão final
 
-- [ ] Confirmar `dados/*.json` e `dados/regulamento.md` idênticos ao repositório base
-- [ ] Revisar todas as tools: nenhuma aceita `apartamento` do modelo sem validar contra `tool_context.state`
-- [ ] Confirmar que agente principal não tem regulamento nas instruções
-- [ ] Escrever `README.md` definitivo com seções **Arquitetura**, **Garantias** e **Como rodar**
-- [ ] Rodar sequência completa dos passos 1–14 do avaliador do zero
+- [x] `dados/*.json` e `dados/regulamento.md` idênticos ao repositório base — md5sum idêntico em todos os 5 arquivos ✓
+- [x] Tools auditadas: nenhuma aceita `apartamento` do modelo sem validar — `reservas.py`, `visitantes.py` leem `tool_context.state["apartamento"]`; `regulamento.py` não tem parâmetro `apartamento` ✓
+- [x] `agente_principal` sem regulamento nas instruções — confirmado por leitura direta e grep ✓
+- [x] `README.md` definitivo escrito com seções **Arquitetura**, **Garantias** e **Como rodar** ✓
+- [x] Sequência completa de ponta a ponta (`scripts/test_e2e.py`): **48/48 checks aprovados** — G1, G2, G3, G4, G5 OK ✓
+
+**Testado com `scripts/test_e2e.py`** (reset + up + G1→G5 numa passada):
+- Dados iniciais (RSV-1377, Marina Duarte) ✓
+- G2 — S1 não vê dados do 302, não cancela reserva do 302 ✓
+- Cancelamento próprio sem confirmação, RSV-1377 removida ✓
+- Quadra taxa=0 sem confirmação ✓
+- G1 — salão com taxa: pendente → nega → não grava → aprova → 1 reserva → reenvio 409 ✓
+- Id inválido 409, sessão inexistente 404 ✓
+- G2 — data ocupada sem vazar RSV-4821 nem "302" ✓
+- G1 — visitante: pendente mesmo com "já confirmo aqui" → aprovado → gravado ✓
+- G4 — piscina domingos 20h, sem capítulos alheios nos eventos ✓
+- G3 — restart: 57 eventos preservados, novas mensagens funcionam, todos os dados de negócio intactos ✓
+- G5 — duas aprovações simultâneas (S3=101, S4=201): 200+200, total 1 reserva ✓
 
 ---
 
@@ -224,4 +237,4 @@ que a tool traduz para uma resposta normal ao agente, que responde ao morador se
 | Garantia 3 — persistência entre restarts | ✅ validado — confirmação pendente sobrevive a restart |
 | Garantia 4 — regulamento consultado, não carregado | ✅ validado — só Capítulo IV nos eventos, horário 20h na resposta |
 | Garantia 5 — concorrência atômica | ✅ validado com threading — 200+200, total 1 reserva |
-| README definitivo (Arquitetura, Garantias, Como rodar) | ⏳ |
+| README definitivo (Arquitetura, Garantias, Como rodar) | ✅ escrito — 3 seções, 5 garantias com arquivo+trecho+razão |
