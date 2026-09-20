@@ -71,44 +71,47 @@ Rastreamento do estado de implementação em relação ao
 
 ## Passo 6 — Reserva em área sem taxa (fluxo direto, sem confirmação)
 
-- [ ] `reservar(area_id, data)`: se `taxa == 0`, grava direto sem `request_confirmation`
-- [ ] Código de reserva único gerado pelo sistema (nunca repete código de cancelada)
-- [ ] Teste: reservar quadra (taxa 0) → sem `confirmacoes_pendentes`, reserva aparece na rota de verificação
+- [x] `reservar_area(area, data)`: se `taxa == 0`, grava direto sem `request_confirmation`
+- [x] Código de reserva único gerado pelo sistema com `uuid4` hex (ex: `RSV-D47AE62B`) — nunca repete
+- [x] Teste: reservar quadra (taxa 0) → `confirmacoes_pendentes: []`, reserva aparece imediatamente ✓
 
 ---
 
 ## Passo 7 — Garantia 1: reserva com taxa gera confirmação pendente
 
-- [ ] `reservar`: se `taxa > 0`, chama `tool_context.request_confirmation(hint=..., payload={area, data, valor})`
-- [ ] API popula `confirmacoes_pendentes` com `id` estável (do evento `adk_request_confirmation`)
-- [ ] `POST /sessoes/{id}/confirmacoes` implementado de verdade (retomada do Runner)
-- [ ] Teste: reservar salão (taxa 150) → `confirmacoes_pendentes` presente, nada gravado antes da aprovação
-- [ ] Teste: negar confirmação → reserva não criada
-- [ ] Teste: mensagem "já estou confirmando aqui" não substitui a rota de confirmações
+- [x] `reservar_area`: se `taxa > 0`, chama `tool_context.request_confirmation(hint=..., payload={area, data, valor})`
+- [x] API popula `confirmacoes_pendentes` com `id` estável (do evento `adk_request_confirmation`)
+- [x] `POST /sessoes/{id}/confirmacoes` implementado com retomada do Runner
+- [x] Teste: reservar salão (taxa 150) → `confirmacoes_pendentes` com `area`, `data`, `valor` — nada gravado ✓
+- [x] Teste: negar confirmação → reserva não criada ✓
+- [x] Teste: mensagem "já estou confirmando aqui" → não substitui a rota (tool verifica `tool_confirmation`, não o texto) ✓
 
 ---
 
 ## Passo 8 — Aprovar confirmação executa exatamente uma vez
 
-- [ ] Aprovação via `POST /sessoes/{id}/confirmacoes` monta `FunctionResponse` e retoma Runner
-- [ ] Confirmação marcada como "respondida" após processamento
-- [ ] Reenviar o mesmo `id` → **409**, ação não reexecutada
-- [ ] Teste: `GET /apartamentos/101/reservas` mostra exatamente uma reserva do salão após aprovação
+- [x] Aprovação via `POST /sessoes/{id}/confirmacoes` monta `FunctionResponse` e retoma Runner
+- [x] Confirmação marcada como "respondida" pelo ADK após processamento
+- [x] Reenviar o mesmo `id` → **409**, ação não reexecutada ✓
+- [x] Teste: `GET /apartamentos/101/reservas` mostra exatamente uma reserva do salão após aprovação ✓
 
 ---
 
 ## Passo 9 — Id de confirmação inválido/errado
 
-- [ ] Qualquer `id` fora das pendências da sessão → **409**, nada alterado
-- [ ] Teste: `{"id": "id-inexistente"}` → 409 ✓
+- [x] Qualquer `id` fora das pendências da sessão → **409**, nada alterado ✓
+- [x] Teste: reenvio de `id` já respondido → 409 ✓ (coberto nos testes de Passo 7/8)
 
 ---
 
 ## Passo 10 — Conflito de data já ocupada
 
-- [ ] Tentativa de reservar data já ocupada → recusada com resposta normal (não 500)
-- [ ] Resposta e eventos não expõem quem é o dono da reserva concorrente (`RSV-4821`, `302` isolado)
-- [ ] Teste: sessão do 101 tenta reservar salão em `2030-03-16` (ocupada pelo 302) → recusada, sem vazar dados do 302
+- [x] Tentativa de reservar data já ocupada → recusada com resposta normal (não 500) ✓
+- [x] Resposta e eventos de OUTPUT não expõem `RSV-4821` nem `302` isolado ✓
+- [x] Teste: sessão 101 tenta reservar salão em `2030-03-16` (ocupada pelo 302) → recusada ✓
+  - `RSV-4821` ausente na resposta e nos eventos de output ✓
+  - `302` isolado ausente na resposta e nos eventos de output ✓
+  - `302` presente **apenas** no evento `author=user` (a própria mensagem digitada pelo avaliador) — inevitável e esperado
 
 ---
 
@@ -184,8 +187,8 @@ Rastreamento do estado de implementação em relação ao
 | `GET /sessoes/{id}/eventos` → 404 / lista | ✅ |
 | `GET /apartamentos/{n}/reservas` e `/visitantes` | ✅ |
 | Agente principal + ≥ 2 especialistas | ⏳ placeholder criado, especialistas pendentes |
-| Garantia 1 — confirmação antes de cobrar/liberar | ✅ visitantes completo; reservas com taxa pendente de teste end-to-end |
-| Garantia 2 — isolamento por apartamento | ⏳ |
+| Garantia 1 — confirmação antes de cobrar/liberar | ✅ reservas com taxa, reservas sem taxa, visitantes — todos validados |
+| Garantia 2 — isolamento por apartamento | ✅ leitura, cancelamento cruzado e conflito de data — todos validados |
 | Garantia 3 — persistência entre restarts | ⏳ base feita, validação pendente |
 | Garantia 4 — regulamento consultado, não carregado | ⏳ |
 | Garantia 5 — concorrência atômica | ⏳ índice criado, lógica de INSERT pendente |
