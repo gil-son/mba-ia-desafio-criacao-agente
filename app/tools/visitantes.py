@@ -45,20 +45,38 @@ def autorizar_visitante(nome: str, data: str, tool_context: ToolContext) -> dict
     Sempre requer confirmação antes de gravar (Garantia 1 — libera acesso).
     O morador não pode pular a confirmação dizendo "já confirmo aqui".
 
+    Fluxo de dois passos (mesmo padrão de reservar_area):
+      1. Primeira execução: tool_context.tool_confirmation é None →
+         chama request_confirmation e retorna sem gravar.
+      2. Re-execução após confirmação: tool_context.tool_confirmation está
+         preenchido → grava se confirmed=True, recusa se confirmed=False.
+
     Args:
         nome: Nome completo do visitante.
         data: Data da visita no formato AAAA-MM-DD.
     """
     apartamento = tool_context.state["apartamento"]
 
-    # Garantia 1: libera acesso → confirmação obrigatória
+    # Re-execução pós-confirmação: tool_confirmation foi preenchido pelo ADK
+    if tool_context.tool_confirmation is not None:
+        if not tool_context.tool_confirmation.confirmed:
+            return {
+                "sucesso": False,
+                "mensagem": f"Autorização de {nome} em {data} cancelada pelo morador.",
+            }
+        # Aprovado — grava o visitante
+        with SessionLocal() as db:
+            sucesso, mensagem = _autorizar(db, apartamento, nome, data)
+        return {"sucesso": sucesso, "mensagem": mensagem}
+
+    # Primeira execução: libera acesso → confirmação obrigatória (Garantia 1)
+    # Isso garante que "já estou confirmando aqui" no texto nunca substitui
+    # a rota POST /sessoes/{id}/confirmacoes.
     tool_context.request_confirmation(
-        hint=(
-            f"Confirma a autorização de entrada para {nome} em {data}?"
-        ),
+        hint=f"Confirma a autorização de entrada para {nome} em {data}?",
         payload={"nome": nome, "data": data},
     )
-    # Retorna sem gravar — a tool será re-executada após confirmação
+    # Retorna sem gravar — a tool será re-executada com tool_confirmation preenchido
     return {
         "aguardando_confirmacao": True,
         "mensagem": f"Aguardando confirmação para autorizar {nome} em {data}.",

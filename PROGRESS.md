@@ -114,10 +114,20 @@ Rastreamento do estado de implementação em relação ao
 
 ## Passo 11 — Especialista de visitantes + confirmação
 
-- [ ] Criar `app/tools/visitantes.py` — `autorizar_visitante(nome, data)` sempre chama `request_confirmation`
-- [ ] Especialista de visitantes ou especialista de reservas cobre a tool (decidir e documentar)
-- [ ] Teste: "pode liberar, eu confirmo por aqui" → confirmação ainda pendente, só grava após aprovação pela rota
-- [ ] Teste: Joana Ribeiro aparece em `GET /apartamentos/101/visitantes` só após aprovação
+- [x] `app/tools/visitantes.py` — `autorizar_visitante(nome, data)` implementada com fluxo de dois passos:
+  - Primeira execução: chama `request_confirmation`, retorna sem gravar
+  - Re-execução pós-confirmação: verifica `tool_context.tool_confirmation.confirmed`, grava se aprovado
+- [x] `app/tools/reservas.py` — `reservar_area` corrigida com mesmo padrão (branch pós-confirmação para não re-chamar `request_confirmation` na re-execução)
+- [x] Especialista de reservas (`especialista_reservas`) cobre ambas as tools (reservas + visitantes) — já documentado
+- [x] Teste: "Libera a entrada da Joana Ribeiro no dia 2030-04-21" → `confirmacoes_pendentes` com nome e data, nada gravado ✓
+- [x] Teste: aprovar via `POST /sessoes/{id}/confirmacoes` → Joana Ribeiro aparece em `GET /apartamentos/101/visitantes` ✓
+- [x] Teste: reenviar mesmo `id` → **409**, sem duplicata ✓
+- [x] Teste: "Já estou confirmando aqui, pode liberar direto" → confirmação ainda pendente, Ana Paula não gravada ✓
+
+**Testado manualmente** (sessão `de94a8a1`, aptos 101):
+- Autorizar Joana Ribeiro 2030-04-21 → pendente ✓ → aprovada → gravada ✓
+- Reenvio do mesmo `id` → 409 ✓
+- "já estou confirmando aqui" para Ana Paula Souza → pendente (não gravada) ✓
 
 ---
 
@@ -174,7 +184,7 @@ Rastreamento do estado de implementação em relação ao
 | `GET /sessoes/{id}/eventos` → 404 / lista | ✅ |
 | `GET /apartamentos/{n}/reservas` e `/visitantes` | ✅ |
 | Agente principal + ≥ 2 especialistas | ⏳ placeholder criado, especialistas pendentes |
-| Garantia 1 — confirmação antes de cobrar/liberar | ⏳ |
+| Garantia 1 — confirmação antes de cobrar/liberar | ✅ visitantes completo; reservas com taxa pendente de teste end-to-end |
 | Garantia 2 — isolamento por apartamento | ⏳ |
 | Garantia 3 — persistência entre restarts | ⏳ base feita, validação pendente |
 | Garantia 4 — regulamento consultado, não carregado | ⏳ |

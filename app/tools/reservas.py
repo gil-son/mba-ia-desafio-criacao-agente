@@ -109,6 +109,12 @@ def reservar_area(area: str, data: str, tool_context: ToolContext) -> dict:
     - Área com taxa zero: grava direto, sem confirmação (passo 6).
     - Área com taxa maior que zero: solicita confirmação antes de gravar (Garantia 1).
 
+    Fluxo de dois passos para áreas com taxa:
+      1. Primeira execução: tool_context.tool_confirmation é None →
+         chama request_confirmation e retorna sem gravar.
+      2. Re-execução após confirmação: tool_context.tool_confirmation preenchido →
+         grava se confirmed=True, recusa se confirmed=False.
+
     Args:
         area: ID da área (ex: 'salao-de-festas', 'churrasqueira', 'quadra').
         data: Data desejada no formato AAAA-MM-DD.
@@ -119,7 +125,21 @@ def reservar_area(area: str, data: str, tool_context: ToolContext) -> dict:
     if area_info is None:
         return {"sucesso": False, "mensagem": f"Área '{area}' não encontrada."}
 
-    # Verifica disponibilidade antes de prosseguir (verifica conflito simples)
+    # Re-execução pós-confirmação: tool_confirmation foi preenchido pelo ADK
+    if tool_context.tool_confirmation is not None:
+        if not tool_context.tool_confirmation.confirmed:
+            return {
+                "sucesso": False,
+                "mensagem": (
+                    f"Reserva de {area_info['nome']} em {data} cancelada pelo morador."
+                ),
+            }
+        # Aprovado — tenta gravar (INSERT atômico, Garantia 5)
+        with SessionLocal() as db:
+            sucesso, mensagem, codigo = _criar(db, apartamento, area, data)
+        return {"sucesso": sucesso, "mensagem": mensagem, "codigo": codigo}
+
+    # Verifica disponibilidade antes de prosseguir
     with SessionLocal() as db:
         livre = verificar_disponibilidade(db, area, data)
 
@@ -133,7 +153,7 @@ def reservar_area(area: str, data: str, tool_context: ToolContext) -> dict:
     taxa = area_info.get("taxa", 0)
 
     if taxa > 0:
-        # Garantia 1: cobra confirmação para ações com cobrança
+        # Garantia 1: gera cobrança → confirmação obrigatória
         tool_context.request_confirmation(
             hint=(
                 f"Confirma a reserva de {area_info['nome']} para {data}? "
@@ -141,7 +161,7 @@ def reservar_area(area: str, data: str, tool_context: ToolContext) -> dict:
             ),
             payload={"area": area, "data": data, "valor": taxa},
         )
-        # Retorna sem gravar — a tool será re-executada após confirmação
+        # Retorna sem gravar — a tool será re-executada com tool_confirmation preenchido
         return {
             "aguardando_confirmacao": True,
             "mensagem": (
