@@ -46,26 +46,26 @@ Rastreamento do estado de implementação em relação ao
 
 ## Passo 3 — Garantia 2 (parte 1): isolamento de leitura por apartamento
 
-- [ ] Criar `app/tools/reservas.py` — tool de consulta lê `tool_context.state["apartamento"]`, nunca argumento do modelo
-- [ ] Criar `app/storage/repo_reservas.py` — consulta de reservas por apartamento
-- [ ] Criar `app/storage/repo_visitantes.py` — consulta de visitantes por apartamento
-- [ ] Especialista de reservas (`app/agents/especialista_reservas.py`) registrado como sub-agente do principal
-- [ ] Teste: sessão do 101 perguntando por dados do 302 → sem `RSV-4821`, sem `Marina Duarte` na resposta e nos eventos
+- [x] `app/tools/reservas.py` — `ver_minhas_reservas` lê `tool_context.state["apartamento"]`, nunca argumento do modelo
+- [x] `app/storage/repo_reservas.py` — `listar_reservas_apartamento(db, apartamento)` filtra por apartamento
+- [x] `app/storage/repo_visitantes.py` — `listar_visitantes_apartamento(db, apartamento)` filtra por apartamento
+- [x] `app/agents/especialista_reservas.py` registrado como sub-agente do principal em `app/agents/principal.py`
+- [x] Teste G2-A (Passo 10): sessão do 101 perguntando por dados do 302 → sem `RSV-4821`, sem `Marina Duarte` na resposta e nos eventos ✓
 
 ---
 
 ## Passo 4 — Cancelamento entre apartamentos (validação negativa)
 
-- [ ] `cancelar_reserva(codigo)` valida `reserva.apartamento == tool_context.state["apartamento"]`; recusa sem alterar nada se não bater
-- [ ] Teste: pedir cancelamento da `RSV-4821` (do 302) numa sessão do 101 → 302 intacto, `RSV-4821` não vaza nos eventos
+- [x] `cancelar_minha_reserva(codigo)` em `app/tools/reservas.py` chama `_cancelar(db, codigo, apartamento)` — valida `reserva.apartamento == tool_context.state["apartamento"]`; recusa sem alterar nada se não bater
+- [x] Teste G2-B (Passo 10): pedir cancelamento da `RSV-4821` (do 302) numa sessão do 101 → 302 intacto, `RSV-4821` não vaza nos eventos ✓
 
 ---
 
 ## Passo 5 — Cancelamento do próprio apartamento (sem confirmação)
 
-- [ ] Mesma tool: quando `reserva.apartamento == apartamento da sessão`, cancela direto (sem `request_confirmation`)
-- [ ] Efeito imediato em `GET /apartamentos/{n}/reservas`
-- [ ] Teste: `RSV-1377` (101) cancelada → não aparece mais na rota de verificação
+- [x] Mesma tool: quando `reserva.apartamento == apartamento da sessão`, `cancelar_reserva` em `repo_reservas.py` cancela direto (sem `request_confirmation`)
+- [x] Efeito imediato em `GET /apartamentos/{n}/reservas`
+- [x] Teste G2-C (validado nos Passos 7/8): `RSV-1377` (101) cancelada → não aparece mais na rota de verificação ✓
 
 ---
 
@@ -136,11 +136,23 @@ Rastreamento do estado de implementação em relação ao
 
 ## Passo 12 — Garantia 4: regulamento consultado, não carregado
 
-- [ ] Criar `app/tools/regulamento.py` — `consultar_regulamento(pergunta)` busca trecho relevante em `dados/regulamento.md`, nunca carrega o arquivo inteiro
-- [ ] Criar `app/agents/especialista_regulamento.py` — agente com a tool de regulamento
-- [ ] Agente principal **sem** o regulamento nas instruções (verificar com grep)
-- [ ] Teste: pergunta sobre piscina → resposta traz horário correto
-- [ ] Teste: `GET /sessoes/{id}/eventos` não contém trechos de capítulos não relacionados
+- [x] `app/tools/regulamento.py` — `consultar_regulamento(pergunta)` divide o regulamento em seções por capítulo/artigo, pontua por relevância e retorna no máximo as 2 seções mais relevantes — nunca o documento inteiro
+- [x] `app/agents/especialista_regulamento.py` — agente com a tool `consultar_regulamento`; registrado como sub-agente do principal
+- [x] Agente principal (`app/agents/principal.py`) **sem** o regulamento nas instruções — confirmado por leitura direta: nenhuma referência ao conteúdo do regulamento, apenas nome do especialista e instrução de delegação
+- [x] Teste (sessão `6b9be1ab`): pergunta "Posso usar a piscina aos domingos à noite? Até que horas ela fica aberta?" → resposta: "**aos domingos e feriados, a piscina funciona das 9h às 20h**" ✓
+- [x] `GET /sessoes/{id}/eventos`: 8 eventos, tool retornou apenas **Capítulo IV: Piscina** (Art. 21–28) — nenhum trecho de capítulos alheios (silêncio, salão, animais, mudanças, obras, garagem, lixo, penalidades) nos eventos ✓
+
+**Trecho retornado pela tool `consultar_regulamento`** (seções: `['Capítulo IV: Piscina']`):
+> Art. 22. A piscina observa os seguintes períodos de uso:
+> I. De segunda a sábado, a piscina funciona das 8h às 22h.
+> II. **Aos domingos e feriados, a piscina funciona das 9h às 20h.**
+> Parágrafo único. Fora desses períodos, o recinto da piscina permanece fechado (…)
+> (Art. 21–28 completos, apenas Capítulo IV)
+
+**Testado com `scripts/test_garantia4.py`** (sessão `6b9be1ab`, apto 101):
+- Resposta contém horário 20h ✓
+- Eventos: 8 no total, nenhum trecho de capítulo alheio ✓
+- `principal.py` sem regulamento no prompt ✓
 
 ---
 
@@ -206,10 +218,10 @@ que a tool traduz para uma resposta normal ao agente, que responde ao morador se
 | `POST /sessoes` → 201 | ✅ |
 | `GET /sessoes/{id}/eventos` → 404 / lista | ✅ |
 | `GET /apartamentos/{n}/reservas` e `/visitantes` | ✅ |
-| Agente principal + ≥ 2 especialistas | ⏳ placeholder criado, especialistas pendentes |
+| Agente principal + ≥ 2 especialistas | ✅ `agente_principal` + `especialista_reservas` + `especialista_regulamento` (3 agentes, 2 sub-agentes) |
 | Garantia 1 — confirmação antes de cobrar/liberar | ✅ reservas com taxa, reservas sem taxa, visitantes — todos validados |
 | Garantia 2 — isolamento por apartamento | ✅ leitura, cancelamento cruzado e conflito de data — todos validados |
 | Garantia 3 — persistência entre restarts | ✅ validado — confirmação pendente sobrevive a restart |
-| Garantia 4 — regulamento consultado, não carregado | ⏳ |
+| Garantia 4 — regulamento consultado, não carregado | ✅ validado — só Capítulo IV nos eventos, horário 20h na resposta |
 | Garantia 5 — concorrência atômica | ✅ validado com threading — 200+200, total 1 reserva |
 | README definitivo (Arquitetura, Garantias, Como rodar) | ⏳ |
