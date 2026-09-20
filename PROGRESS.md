@@ -166,10 +166,21 @@ Rastreamento do estado de implementação em relação ao
 
 ## Passo 14 — Garantia 5: concorrência real (atomicidade)
 
-- [ ] Índice único parcial `UNIQUE(area, data) WHERE status='ativa'` já criado em `db.py` ✓ (base feita)
-- [ ] `INSERT` de reserva dentro de transação que falha atomicamente na violação do índice
-- [ ] Capturar `IntegrityError` e traduzir para resposta de negócio normal (não 500)
-- [ ] Teste: duas aprovações simultâneas para mesma área/data → ambas respondem **200**, soma 1 reserva
+- [x] Índice único parcial `UNIQUE(area, data) WHERE status='ativa'` criado em `db.py` ✓
+- [x] `INSERT` atômico em `criar_reserva` (repo_reservas.py) — falha com `IntegrityError` na violação do índice
+- [x] `IntegrityError` capturado e traduzido para resposta de negócio normal (não 500)
+- [x] Teste com `threading.Barrier` — duas aprovações **simultâneas** para mesma área/data → ambas HTTP **200**, total **1** reserva
+
+**Testado com `scripts/test_concorrencia.py`** (S3=apto 101, S4=apto 201, salão 2030-05-11):
+- S3 HTTP 200 — resposta: "já está ocupado" (perdeu a corrida) ✓
+- S4 HTTP 200 — reserva `RSV-DE64FAB6` criada com sucesso (venceu) ✓
+- `GET /apartamentos/101/reservas` → 0 reservas do salão em 2030-05-11 ✓
+- `GET /apartamentos/201/reservas` → 1 reserva do salão em 2030-05-11 ✓
+- **Total = 1** ✓ — nenhum erro de servidor, nenhuma duplicata
+
+Mecanismo: SQLite WAL mode + índice único parcial garante que apenas um `INSERT` vence; o segundo
+lança `IntegrityError`, que `criar_reserva` captura via `db.rollback()` e retorna `(False, mensagem, None)`,
+que a tool traduz para uma resposta normal ao agente, que responde ao morador sem 500.
 
 ---
 
@@ -198,7 +209,7 @@ Rastreamento do estado de implementação em relação ao
 | Agente principal + ≥ 2 especialistas | ⏳ placeholder criado, especialistas pendentes |
 | Garantia 1 — confirmação antes de cobrar/liberar | ✅ reservas com taxa, reservas sem taxa, visitantes — todos validados |
 | Garantia 2 — isolamento por apartamento | ✅ leitura, cancelamento cruzado e conflito de data — todos validados |
-| Garantia 3 — persistência entre restarts | ⏳ base feita, validação pendente |
+| Garantia 3 — persistência entre restarts | ✅ validado — confirmação pendente sobrevive a restart |
 | Garantia 4 — regulamento consultado, não carregado | ⏳ |
-| Garantia 5 — concorrência atômica | ⏳ índice criado, lógica de INSERT pendente |
+| Garantia 5 — concorrência atômica | ✅ validado com threading — 200+200, total 1 reserva |
 | README definitivo (Arquitetura, Garantias, Como rodar) | ⏳ |
