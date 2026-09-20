@@ -3,11 +3,15 @@ Serviço ADK: encapsula o Runner e o DatabaseSessionService.
 
 - Sessões persistidas em SQLite (data/sessions.db) para Garantia 3.
 - Apartamento gravado em session.state["apartamento"] no momento da criação.
+- ResumabilityConfig(is_resumable=True) para suporte ao fluxo de confirmação
+  (Garantia 1 — retomada após request_confirmation).
 """
 
 import os
 from pathlib import Path
 
+from google.adk.apps import App
+from google.adk.apps._configs import ResumabilityConfig
 from google.adk.runners import Runner
 from google.adk.sessions import DatabaseSessionService
 
@@ -18,7 +22,7 @@ DATA_DIR = BASE_DIR / "data"
 
 _APP_NAME = "residencial-aurora"
 
-# Instância única reutilizada pelo FastAPI (inicializada no startup)
+# Instâncias únicas reutilizadas pelo FastAPI (inicializadas no startup)
 _session_service: DatabaseSessionService | None = None
 _runner: Runner | None = None
 
@@ -45,9 +49,17 @@ def init_runner() -> None:
     db_url = f"sqlite+aiosqlite:///{DATA_DIR / 'sessions.db'}"
 
     _session_service = DatabaseSessionService(db_url=db_url)
+
+    app = App(
+        name=_APP_NAME,
+        root_agent=root_agent,
+        # ResumabilityConfig(is_resumable=True) habilita a retomada de invocações
+        # interrompidas por request_confirmation (Garantia 1).
+        resumability_config=ResumabilityConfig(is_resumable=True),
+    )
+
     _runner = Runner(
-        agent=root_agent,
-        app_name=_APP_NAME,
+        app=app,
         session_service=_session_service,
     )
 
