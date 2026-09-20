@@ -146,12 +146,21 @@ Rastreamento do estado de implementação em relação ao
 
 ## Passo 13 — Garantia 3: persistência entre restarts (maior risco técnico)
 
-- [ ] `DatabaseSessionService` já configurado com `sqlite+aiosqlite:///.../sessions.db` ✓ (base feita)
-- [ ] **Validar** que fluxo de confirmação (Passos 7–9) funciona com sessão persistida após restart (risco alto: bug conhecido em algumas versões do ADK)
-- [ ] Testar: matar processo → subir de novo → `GET /sessoes/{id}/eventos` devolve histórico anterior ✓
-- [ ] Testar: novas mensagens funcionam após restart
-- [ ] Testar: reservas/visitantes gravados antes do restart continuam nas rotas de verificação
-- [ ] Código de reserva gerado por contador/uuid persistido no storage, não em memória
+- [x] `DatabaseSessionService` configurado com `sqlite+aiosqlite:///.../sessions.db` ✓
+- [x] **Validado**: fluxo de confirmação funciona com sessão persistida após restart ✓ — **sem bugs**
+- [x] Testar: matar processo → subir de novo → `GET /sessoes/{id}/eventos` devolve 12 eventos (esperado: 12) ✓
+- [x] Testar: novas mensagens funcionam após restart ✓ (envio de "Quais são as minhas reservas?" → 200)
+- [x] Testar: reservas/visitantes gravados antes do restart continuam nas rotas de verificação ✓
+  - RSV-1377 (quadra 2030-03-09) ✓ | RSV-BF3CC504 (quadra 2030-06-01) ✓ | RSV-4821 do 302 ✓
+- [x] Testar: confirmação pendente sobrevive ao restart e retoma corretamente ✓
+  - `adk-14f03840` pendente antes do restart → aprovada após restart → RSV-B151B015 criada ✓
+- [x] Código de reserva gerado por `uuid4` hex no momento do INSERT — nunca em memória ✓
+
+**Testado manualmente** (sessão `c6f193b0`, apto 101):
+- 12 eventos antes do restart → 12 eventos após restart → 21 após aprovação pós-restart ✓
+- Dados de negócio intactos após restart ✓
+- Confirmação pós-restart retomou e gravou RSV-B151B015 (salão 2030-07-15) ✓
+- **Nenhuma das variações de topologia/Runner/App foi necessária** — a configuração atual (`DatabaseSessionService` + `ResumabilityConfig(is_resumable=True)` + `sub_agents`) funciona com ADK 2.9.2 ✓
 
 ---
 
